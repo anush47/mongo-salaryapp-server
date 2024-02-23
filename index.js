@@ -28,7 +28,7 @@ app.get("/get-companies", (req, res) => {
         };
       });
       res.json(companies);
-      console.log(companies);
+      // console.log(companies);
     })
     .catch((err) => res.json(err));
 });
