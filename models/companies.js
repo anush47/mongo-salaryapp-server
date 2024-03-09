@@ -39,6 +39,25 @@ companySchema.add({
       ],
     },
   ],
+  monthly_payments: [
+    {
+      period: { type: Date },
+      //epf
+      epf_reference_no: { type: String },
+      epf_amount: { type: Number },
+      epf_payment_method: { type: String },
+      epf_cheque_no: { type: String },
+      epf_collected_day: { type: Date },
+      epf_paid_day: { type: Date },
+      //etf
+      etf_amount: { type: Number },
+      etf_payment_method: { type: String },
+      etf_cheque_no: { type: String },
+      etf_collected_day: { type: Date },
+      etf_paid_day: { type: Date },
+      my_payment: { type: Number },
+    },
+  ],
 });
 
 const companyModel = mongoose.model("companies", companySchema);

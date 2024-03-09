@@ -9,7 +9,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-//mongoose.connect("mongodb://127.0.0.1:27017/salary-app");
 mongoose.connect(process.env.MONGODB_URL);
 
 app.get("/get-companies", (req, res) => {
@@ -20,15 +19,23 @@ app.get("/get-companies", (req, res) => {
       { name: 1, employer_no: 1, active: 1, employees: 1, _id: 0 } // Projection to include only specified fields
     )
     .then((companies) => {
-      //drop the employees field and get the count of employees
+      // Modify companies data
       companies = companies.map((company) => {
+        let employeesCount = 0;
+        let activeEmployeesCount = 0;
+        if (company.employees && Array.isArray(company.employees)) {
+          employeesCount = company.employees.length;
+          activeEmployeesCount = company.employees.filter(
+            (employee) => employee.active === true
+          ).length;
+        }
         return {
           ...company._doc,
-          employeeCount: company.employees.length,
+          employeesCount: employeesCount,
+          activeEmployeesCount: activeEmployeesCount,
         };
       });
       res.json(companies);
-      // console.log(companies);
     })
     .catch((err) => res.json(err));
 });
@@ -58,12 +65,19 @@ app.get("/fields", (req, res) => {
       res.json(employee_Fields);
       break;
     case "monthly-employee-details":
-      const monthly_employee_Fields = Object.keys(
+      const monthly_employee_fields = Object.keys(
         companyModel.schema.paths.employees.schema.paths.monthly_details.schema
           .paths
       );
       //console.log(monthly_employee_Fields);
-      res.json(monthly_employee_Fields);
+      res.json(monthly_employee_fields);
+      break;
+    case "monthly-payments":
+      const monthly_payment_fields = Object.keys(
+        companyModel.schema.paths.monthly_payments.schema.paths
+      );
+      //console.log(monthly_payment_fields);
+      res.json(monthly_payment_fields);
       break;
     default:
       break;
@@ -83,7 +97,19 @@ app.post("/update-company", async (req, res) => {
     const updateData = { ...req.body };
     const companyId = updateData._id;
     delete updateData._id;
-    console.log(updateData.employees[0].monthly_details);
+
+    // Check if 'monthly_details' is present and has a valid structure
+    if (
+      updateData.employees &&
+      Array.isArray(updateData.employees) &&
+      updateData.employees.length > 0
+    ) {
+      updateData.employees.forEach((employee) => {
+        if (!employee.monthly_details) {
+          employee.monthly_details = []; // Set empty array if 'monthly_details' is missing
+        }
+      });
+    }
 
     if (companyDetailsValidation(updateData)) {
       const updatedCompany = await companyModel.findByIdAndUpdate(
@@ -121,6 +147,7 @@ app.post("/add-company", async (req, res) => {
     try {
       const newCompany = new companyModel(req.body);
       await newCompany.save();
+      console.log(newCompany);
 
       res
         .status(201)
@@ -141,6 +168,26 @@ app.post("/add-company", async (req, res) => {
     }
   } else {
     return res.status(400).send("Invalid data");
+  }
+});
+
+app.post("/delete-company", async (req, res) => {
+  const { employer_no } = req.body.params; // Assuming employer_no is sent in the request body
+  console.log(employer_no);
+  try {
+    // Find the company by employer_no and delete it
+    const deletedCompany = await companyModel.findOneAndDelete({ employer_no });
+
+    if (!deletedCompany) {
+      return res.status(404).json({ error: "Company not found." });
+    }
+
+    res.json({ message: "Company deleted successfully.", deletedCompany });
+  } catch (error) {
+    console.error("Error deleting company:", error);
+    res
+      .status(500)
+      .json({ error: "An error occurred while deleting the company." });
   }
 });
 
