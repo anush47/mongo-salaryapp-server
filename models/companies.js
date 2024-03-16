@@ -25,9 +25,11 @@ companySchema.add({
       divide_by: { type: Number },
       gross_salary: { type: Number },
       total_salary: { type: Number },
+      total_variation: { type: Number },
+      ot_hours_range: { type: String }, // "10-20"
       monthly_details: [
         {
-          period: { type: Date },
+          period: { type: String, unique: true },
           ot: { type: Number },
           ot_y: { type: String },
           allowances: { type: Number },
@@ -41,7 +43,7 @@ companySchema.add({
   ],
   monthly_payments: [
     {
-      period: { type: Date },
+      period: { type: Date, unique: true },
       //epf
       epf_reference_no: { type: String },
       epf_amount: { type: Number },
@@ -59,6 +61,15 @@ companySchema.add({
     },
   ],
 });
+
+// Indexes for unique `period` in `monthly_details` array for each employee
+companySchema.index(
+  { "employees.monthly_details.period": 1 },
+  { unique: true }
+);
+
+// Index for unique `period` in `monthly_payments` array for the company schema
+companySchema.index({ "monthly_payments.period": 1 }, { unique: true });
 
 const companyModel = mongoose.model("companies", companySchema);
 
