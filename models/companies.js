@@ -24,12 +24,15 @@ companySchema.add({
       active: { type: Boolean },
       divide_by: { type: Number },
       gross_salary: { type: Number },
+      incentive: { type: Number },
+      incentive_variation: { type: Number },
       total_salary: { type: Number },
       total_variation: { type: Number },
       ot_hours_range: { type: String }, // "10-20"
       monthly_details: [
         {
           period: { type: String, unique: true },
+          gross_salary: { type: Number },
           ot: { type: Number },
           ot_y: { type: String },
           allowances: { type: Number },
