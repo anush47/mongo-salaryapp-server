@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
+const puppeteer = require("puppeteer");
 const companyModel = require("./models/companies");
 const { companyDetailsValidation } = require("./validation/validation");
 require("dotenv").config();
@@ -11,12 +12,70 @@ app.use(express.json());
 
 mongoose.connect(process.env.MONGODB_URL);
 
+const get_ref_no = async (employer_no, period) => {
+  const url = "https://www.cbsl.lk/EPFCRef/";
+
+  try {
+    // Extracting employer number parts
+    const [zn, em] = employer_no.split("/");
+    const mn = period.replace("-", "");
+
+    // Launching Puppeteer browser
+    const browser = await puppeteer.launch({ headless: true });
+    const page = await browser.newPage();
+
+    // Navigate to the target URL
+    await page.goto(url);
+
+    // Filling form inputs
+    await page.type("#zn", zn.toUpperCase());
+    await page.type("#em", em);
+
+    // Checking if mn is a valid option in the select list
+    const mnOptionExists = await page.evaluate((mn) => {
+      const mnSelect = document.querySelector("#mn");
+      return Array.from(mnSelect.options).some((option) => option.value === mn);
+    }, mn);
+
+    await page.select("#mn", mn);
+    await page.click("#checkb");
+
+    // Waiting for the results
+    await page.waitForSelector("#empnm");
+
+    // Extracting data
+    const empNameElement = await page.$("#empnm");
+    let empName = await page.evaluate(
+      (el) => el.innerText.split(":")[1].trim(),
+      empNameElement
+    );
+
+    const refNoElement = await page.$("#refno");
+    let refNo = "";
+
+    if (mnOptionExists) {
+      refNo = await page.evaluate(
+        (el) => el.innerText.split(":")[1].trim(),
+        refNoElement
+      );
+    }
+
+    // Closing browser
+    await browser.close();
+
+    return [refNo, empName];
+  } catch (error) {
+    console.error("An error occurred:", error);
+    return [null, null];
+  }
+};
+
 app.get("/get-companies", (req, res) => {
   const search = req.query.search;
   companyModel
     .find(
-      { name: new RegExp(search || "", "i") },
-      { name: 1, employer_no: 1, active: 1, employees: 1, _id: 0 } // Projection to include only specified fields
+      { name: new RegExp(search || "", "i") }
+      //{ _id: 0 } // Projection to include only specified fields
     )
     .then((companies) => {
       // Modify companies data
@@ -31,8 +90,8 @@ app.get("/get-companies", (req, res) => {
         }
         return {
           ...company._doc,
-          employeesCount: employeesCount,
-          activeEmployeesCount: activeEmployeesCount,
+          employees_count: employeesCount,
+          active_employees_count: activeEmployeesCount,
         };
       });
       res.json(companies);
@@ -92,6 +151,14 @@ app.get("/get-company", (req, res) => {
     .catch((err) => res.json(err));
 });
 
+app.get("/get-reference-no", async (req, res) => {
+  const employer_no = req.query.employer_no;
+  const period = req.query.period;
+  let [referenceNo, name] = await get_ref_no(employer_no, period);
+  console.log(name, employer_no, period, referenceNo);
+  res.json(referenceNo);
+});
+
 app.post("/update-company", async (req, res) => {
   try {
     const updateData = { ...req.body };
@@ -117,6 +184,8 @@ app.post("/update-company", async (req, res) => {
         { $set: updateData },
         { new: true }
       );
+
+      console.log("haha");
 
       res.json({
         message: "Company updated successfully",
@@ -146,8 +215,8 @@ app.post("/add-company", async (req, res) => {
   if (companyDetailsValidation(req.body)) {
     try {
       const newCompany = new companyModel(req.body);
-      await newCompany.save();
       console.log(newCompany);
+      await newCompany.save();
 
       res
         .status(201)

@@ -14,12 +14,14 @@ companySchema.add({
   pay_slips_required: { type: Boolean },
   default_epf_payment_method: { type: String },
   default_etf_payment_method: { type: String },
-  start_day: { type: Date },
-  start_day_by_me: { type: Date },
+  start_day: { type: String },
+  start_day_by_me: { type: String },
+  my_payment: { type: Number },
   employees: [
     {
-      epf_no: { type: Number },
+      epf_no: { type: Number, unique: true, required: true },
       name: { type: String },
+      designation: { type: String },
       nic: { type: String },
       active: { type: Boolean },
       divide_by: { type: Number },
@@ -27,11 +29,12 @@ companySchema.add({
       incentive: { type: Number },
       incentive_variation: { type: Number },
       total_salary: { type: Number },
-      total_variation: { type: Number },
+      total_salary_variation: { type: Number },
       ot_hours_range: { type: String }, // "10-20"
+      b_card: { type: String },
       monthly_details: [
         {
-          period: { type: String, unique: true },
+          period: { type: String, unique: true, required: true },
           gross_salary: { type: Number },
           ot: { type: Number },
           ot_y: { type: String },
@@ -46,20 +49,20 @@ companySchema.add({
   ],
   monthly_payments: [
     {
-      period: { type: Date, unique: true },
+      period: { type: String, unique: true, required: true },
       //epf
       epf_reference_no: { type: String },
       epf_amount: { type: Number },
       epf_payment_method: { type: String },
       epf_cheque_no: { type: String },
-      epf_collected_day: { type: Date },
-      epf_paid_day: { type: Date },
+      epf_collected_day: { type: String },
+      epf_paid_day: { type: String },
       //etf
       etf_amount: { type: Number },
       etf_payment_method: { type: String },
       etf_cheque_no: { type: String },
-      etf_collected_day: { type: Date },
-      etf_paid_day: { type: Date },
+      etf_collected_day: { type: String },
+      etf_paid_day: { type: String },
       my_payment: { type: Number },
     },
   ],
