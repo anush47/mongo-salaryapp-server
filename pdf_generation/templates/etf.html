@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ETF Statement</title>
+    <style>
+      body {
+        font-family: "Arial", sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: #ffffff;
+        color: #000000; /* Set text color to black */
+      }
+      .container {
+        width: 23cm; /* A4 Portrait Width */
+        margin: auto;
+        padding: 20px;
+        padding-top: 30px;
+        background-color: #ffffff;
+      }
+      table,
+      th,
+      td {
+        border: 1px solid #000000; /* Darker border */
+        border-collapse: collapse;
+      }
+      th,
+      td {
+        padding: 8px 15px; /* Adjusted padding */
+        text-align: left;
+        font-size: 14px;
+      }
+      th {
+        background-color: #ffffff;
+        font-weight: bold;
+        border-bottom: 2px solid;
+      }
+      .top-left {
+        float: left;
+        width: 50%;
+      }
+      .top-right {
+        float: right;
+        width: 50%;
+      }
+      .top-right table {
+        float: right; /* Align the table to the right */
+      }
+      .clearfix {
+        clear: both;
+      }
+      h2 {
+        margin-bottom: 10px; /* Increased margin */
+        color: #000000;
+      }
+      p {
+        margin: 10px 0; /* Increased margin */
+        color: #000000;
+      }
+      .signature {
+        font-size: 18px; /* Increased font size */
+        margin-top: 100px; /* Increased margin */
+        margin-bottom: 10px; /* Increased margin */
+        color: #000000;
+      }
+      .total {
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="top-left">
+        <table>
+          <thead>
+            <tr>
+              <td>EMPLOYEE'S TRUST FUND BOARD</td>
+            </tr>
+            <tr>
+              <td>
+                <h2>{{ company.name }}</h2>
+                <p class="address">{{{ formatAddress company.address }}}</p>
+              </td>
+            </tr>
+          </thead>
+        </table>
+      </div>
+
+      <div class="top-right">
+        <table>
+          <thead>
+            <tr>
+              <th colspan="2">Advice of remittance form R-4</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Employer No.</td>
+              <td class="total">{{ company.employer_no }}</td>
+            </tr>
+            <tr>
+              <td>Month and year of contribution</td>
+              <td>{{ payment_details.period }}</td>
+            </tr>
+            <tr>
+              <td>No. of employees</td>
+              <td>{{ columnSums.no_of_employees }}</td>
+            </tr>
+            <tr>
+              <td>Contribution Rs.</td>
+              <td>{{ columnSums.monthly_etf_3 }}</td>
+            </tr>
+            <tr>
+              <td>Surcharges Rs.</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>Total Remittance</td>
+              <td class="total">{{ columnSums.monthly_etf_3 }}</td>
+            </tr>
+            <tr>
+              <td>Cheque No.</td>
+              <td>{{ payment_details.etf_cheque_no }}</td>
+            </tr>
+            <tr>
+              <td>Bank</td>
+              <td>{{ payment_details.etf_payment_method }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="clearfix"></div>
+      <br />
+
+      <table style="margin-top: 20px; width: 100%">
+        <thead>
+          <tr>
+            <th>Member No.</th>
+            <th>Employee's Name</th>
+            <th>N.I.C. No.</th>
+            <th>Contribution</th>
+            <th>Total Earnings</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{#each monthly_details}}
+          <tr>
+            <td>{{ this.employee_epf_no }}</td>
+            <td>{{ this.employee_name }}</td>
+            <td>{{ this.employee_nic }}</td>
+            <td>{{ this.monthly_etf_3 }}</td>
+            <td>{{ this.monthly_gross_salary }}</td>
+          </tr>
+          {{/each}}
+        </tbody>
+        <tfoot>
+          <tr class="total">
+            <td colspan="3">Total</td>
+            <td>{{ columnSums.monthly_etf_3 }}</td>
+            <td>{{ columnSums.monthly_gross_salary }}</td>
+          </tr>
+        </tfoot>
+      </table>
+      <br /><br />
+      <p>I certify that the information given above is correct.</p>
+      <p class="signature">............................................</p>
+      <p>Signature</p>
+    </div>
+  </body>
+</html>

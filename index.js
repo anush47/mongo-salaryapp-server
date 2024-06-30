@@ -4,6 +4,13 @@ const mongoose = require("mongoose");
 const puppeteer = require("puppeteer");
 const companyModel = require("./models/companies");
 const { companyDetailsValidation } = require("./validation/validation");
+const {
+  generateSalaryPDF,
+  generateEPFPDF,
+  generateETFPDF,
+  generatePaySlipPDF,
+} = require("./pdf_generation/GeneratePDF");
+const { PDFDocument, degrees } = require("pdf-lib");
 require("dotenv").config();
 
 const app = express();
@@ -11,6 +18,328 @@ app.use(cors());
 app.use(express.json());
 
 mongoose.connect(process.env.MONGODB_URL);
+
+// Utility function to fetch details for PDF generation
+const details_for_pdf = async (employer_no, period) => {
+  try {
+    const company = await companyModel.findOne({ employer_no });
+    if (!company) {
+      throw new Error("Company not found.");
+    }
+
+    const monthly_details = company.employees.map((employee) => {
+      const monthlyDetail = employee.monthly_details.find(
+        (detail) => detail.period === period
+      );
+      return { employee: employee, monthly_detail: monthlyDetail };
+    });
+
+    const payment_details = company.monthly_payments.find(
+      (payment) => payment.period === period
+    );
+
+    if (!monthly_details || !payment_details) {
+      throw new Error("Monthly or payment details not found.");
+    }
+
+    return { company, monthly_details, payment_details };
+  } catch (error) {
+    throw new Error(
+      `Failed to fetch details for PDF generation: ${error.message}`
+    );
+  }
+};
+
+// Helper function to generate and combine payslip PDFs
+async function generateCombinedPayslipPDF(
+  company,
+  monthly_details,
+  payment_details,
+  combineIntoOnePage = false
+) {
+  const payslipBuffers = [];
+
+  // Get employee from monthly_details
+  for (const entry of monthly_details) {
+    const payslipPdfBytes = await generatePaySlipPDF(
+      company,
+      [entry], // Pass the relevant monthly_detail entry
+      payment_details,
+      entry.employee.epf_no
+    );
+    payslipBuffers.push(payslipPdfBytes);
+  }
+
+  // Combine all payslip PDFs into one
+  const combinedPdfDoc = await PDFDocument.create();
+  if (combineIntoOnePage) {
+    const page = combinedPdfDoc.addPage();
+    const { width, height } = page.getSize();
+
+    for (let i = 0; i < payslipBuffers.length; i++) {
+      const payslipPdfDoc = await PDFDocument.load(payslipBuffers[i]);
+      const [embeddedPage] = await combinedPdfDoc.embedPages(
+        payslipPdfDoc.getPages()
+      );
+      const xOffset = ((i % 2) * width) / 2;
+      const yOffset = height - (Math.floor(i / 2) * height) / 2 - height / 2;
+
+      page.drawPage(embeddedPage, {
+        x: xOffset,
+        y: yOffset,
+        width: width / 2,
+        height: height / 2,
+      });
+    }
+  } else {
+    for (const payslipBuffer of payslipBuffers) {
+      const payslipPdfDoc = await PDFDocument.load(payslipBuffer);
+      const copiedPages = await combinedPdfDoc.copyPages(
+        payslipPdfDoc,
+        payslipPdfDoc.getPageIndices()
+      );
+      copiedPages.forEach((page) => combinedPdfDoc.addPage(page));
+    }
+  }
+
+  return await combinedPdfDoc.save();
+}
+
+// Function to generate all relevant PDFs and combine them
+async function generateAllPDFs(
+  company,
+  monthly_details,
+  payment_details,
+  printable = false
+) {
+  const buffers = [];
+
+  // Generate Salary PDF if required
+  if (company.salary_sheets_required) {
+    const salaryPdfBytes = await generateSalaryPDF(
+      company,
+      monthly_details,
+      payment_details
+    );
+    //if printable rotate to potrait
+    if (printable === true) {
+      const salaryPdfDoc = await PDFDocument.load(salaryPdfBytes);
+      const [page] = salaryPdfDoc.getPages();
+      page.setRotation(degrees(90));
+      const rotatedPdfBytes = await salaryPdfDoc.save();
+      buffers.push(rotatedPdfBytes);
+    } else {
+      buffers.push(salaryPdfBytes);
+    }
+  }
+
+  // Generate EPF PDF if required
+  if (company.epf_required) {
+    const epfPdfBytes = await generateEPFPDF(
+      company,
+      monthly_details,
+      payment_details
+    );
+    buffers.push(epfPdfBytes);
+    //if printable add two copies
+    if (printable === true) {
+      buffers.push(epfPdfBytes);
+    }
+  }
+
+  // Generate ETF PDF if required
+  if (company.etf_required) {
+    const etfPdfBytes = await generateETFPDF(
+      company,
+      monthly_details,
+      payment_details
+    );
+    buffers.push(etfPdfBytes);
+    //if printable add two copies
+    if (printable === true) {
+      buffers.push(etfPdfBytes);
+    }
+  }
+
+  // Generate Payslips PDF if required (printable format)
+  if (company.pay_slips_required) {
+    const payslipAllPrintablePdfBytes = await generateCombinedPayslipPDF(
+      company,
+      monthly_details,
+      payment_details,
+      true
+    );
+    buffers.push(payslipAllPrintablePdfBytes);
+  }
+
+  // Combine all generated PDFs into one document
+  const combinedPdfDoc = await PDFDocument.create();
+  for (const buffer of buffers) {
+    const pdfDoc = await PDFDocument.load(buffer);
+    const copiedPages = await combinedPdfDoc.copyPages(
+      pdfDoc,
+      pdfDoc.getPageIndices()
+    );
+    copiedPages.forEach((page) => combinedPdfDoc.addPage(page));
+  }
+
+  return await combinedPdfDoc.save();
+}
+
+// Endpoint for generating various PDFs (updated with "all" case)
+app.get("/generate-pdf", async (req, res) => {
+  const { employer_no, period, type, epf_no } = req.query;
+  console.log(employer_no, period, type, epf_no);
+
+  try {
+    if (!employer_no || !period || !type) {
+      return res.status(400).json({ error: "Missing required parameters." });
+    }
+
+    const { company, monthly_details, payment_details } = await details_for_pdf(
+      employer_no,
+      period
+    );
+
+    let pdfBytes, filename;
+
+    switch (type) {
+      case "salary":
+        pdfBytes = await generateSalaryPDF(
+          company,
+          monthly_details,
+          payment_details
+        );
+        filename = `${company.name} - ${period} - salary.pdf`;
+        break;
+      case "epf":
+        pdfBytes = await generateEPFPDF(
+          company,
+          monthly_details,
+          payment_details
+        );
+        filename = `${company.name} - ${period} - epf.pdf`;
+        break;
+      case "etf":
+        pdfBytes = await generateETFPDF(
+          company,
+          monthly_details,
+          payment_details
+        );
+        filename = `${company.name} - ${period} - etf.pdf`;
+        break;
+      case "payslip":
+        if (!epf_no) {
+          return res
+            .status(400)
+            .json({ error: "EPF number is required for payslip." });
+        }
+        pdfBytes = await generatePaySlipPDF(
+          company,
+          monthly_details,
+          payment_details,
+          parseInt(epf_no)
+        );
+        filename = `${company.name} - ${period} - (${epf_no}) payslip.pdf`;
+        break;
+      case "payslip_all":
+        pdfBytes = await generateCombinedPayslipPDF(
+          company,
+          monthly_details,
+          payment_details,
+          false
+        );
+        filename = `${company.name} - ${period} - all_payslips.pdf`;
+        break;
+      case "payslip_all_printable":
+        pdfBytes = await generateCombinedPayslipPDF(
+          company,
+          monthly_details,
+          payment_details,
+          true
+        );
+        filename = `${company.name} - ${period} - all_payslips_printable.pdf`;
+        break;
+      case "all":
+        pdfBytes = await generateAllPDFs(
+          company,
+          monthly_details,
+          payment_details
+        );
+        filename = `${company.name} - ${period} - all_combined.pdf`;
+        break;
+      case "all_printable":
+        pdfBytes = await generateAllPDFs(
+          company,
+          monthly_details,
+          payment_details,
+          true
+        );
+        filename = `${company.name} - ${period} - all_combined_printable.pdf`;
+        break;
+      default:
+        return res.status(400).json({ error: "Invalid PDF type specified." });
+    }
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
+    res.send(Buffer.from(pdfBytes));
+  } catch (error) {
+    console.error("Error generating PDF:", error);
+    res.status(500).json({ error: "Failed to generate PDF." });
+  }
+});
+
+app.get("/generate-pdf-all", async (req, res) => {
+  let { period, printable } = req.query;
+  //to bool
+  printable = printable === "true";
+  console.log(`Generating PDFs for period: ${period} ${printable}`);
+
+  try {
+    // Get all active companies
+    const companies = await companyModel.find({ active: true });
+
+    // Generate PDF for each company
+    const pdfBuffers = [];
+    for (const company of companies) {
+      const { monthly_details, payment_details } = await details_for_pdf(
+        company.employer_no,
+        period
+      );
+      const pdfBytes = await generateAllPDFs(
+        company,
+        monthly_details,
+        payment_details,
+        printable
+      );
+      pdfBuffers.push(pdfBytes);
+    }
+
+    // Combine all generated PDFs into one document
+    const combinedPdfDoc = await PDFDocument.create();
+    for (const buffer of pdfBuffers) {
+      const pdfDoc = await PDFDocument.load(buffer);
+      const copiedPages = await combinedPdfDoc.copyPages(
+        pdfDoc,
+        pdfDoc.getPageIndices()
+      );
+      copiedPages.forEach((page) => combinedPdfDoc.addPage(page));
+    }
+
+    // Prepare the combined PDF for download
+    const pdfBytes = await combinedPdfDoc.save();
+    const filename = `all_companies-${period}.pdf`;
+
+    // Set headers and send the PDF as a response
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(Buffer.from(pdfBytes)); // Ensure buffer is correctly sent
+  } catch (error) {
+    console.error("Error generating PDFs:", error);
+    res.status(500).send("Error generating PDFs");
+  }
+});
 
 const get_ref_no = async (employer_no, period) => {
   const url = "https://www.cbsl.lk/EPFCRef/";
@@ -184,8 +513,6 @@ app.post("/update-company", async (req, res) => {
         { $set: updateData },
         { new: true }
       );
-
-      console.log("haha");
 
       res.json({
         message: "Company updated successfully",

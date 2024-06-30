@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Salary Statement</title>
+    <style>
+      body {
+        font-family: "Arial", sans-serif;
+        color: #000;
+        background-color: #fff;
+        margin: 0;
+        padding: 0;
+      }
+      .container {
+        max-width: 34cm; /* A4 Landscape Width */
+        margin: 20px auto;
+        padding: 20px;
+        border: 1px solid #000;
+      }
+      .header {
+        border-bottom: 2px solid #fff; /* Changed to white */
+        padding-bottom: 10px;
+        margin-bottom: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+      }
+      h2 {
+        font-size: 24px;
+        font-weight: bold;
+        text-transform: uppercase;
+        margin-bottom: 5px;
+        letter-spacing: 1px;
+      }
+      .address {
+        font-size: 12px;
+        line-height: 1.5;
+        margin-bottom: 10px;
+      }
+      .registration {
+        font-size: 14px;
+        line-height: 1.2;
+        text-align: right;
+        font-weight: bold;
+        margin-top: -40px; /* Adjust this value as needed */
+      }
+
+      .center-text {
+        text-align: center;
+        margin-bottom: 10px;
+        font-size: 18px;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        border-bottom: 2px solid #000;
+        padding-bottom: 5px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 20px;
+      }
+      th,
+      td {
+        font-size: 10px;
+        padding: 5px;
+        text-align: center;
+        border: 1px solid #000;
+      }
+      th {
+        background-color: #000; /* Changed to black */
+        color: #fff; /* Changed to white */
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: bold;
+        border-bottom: 2px solid #fff; /* Changed to white */
+      }
+      tbody tr:nth-child(odd) {
+        background-color: #ffffff;
+      }
+      tbody tr:nth-child(even) {
+        background-color: #ffffff;
+      }
+      .signature {
+        height: 40px;
+      }
+      tfoot td {
+        font-weight: bold;
+        background-color: #ffffff;
+        border-top: 2px solid #000;
+      }
+      .horizontal-line {
+        width: 100%;
+        border-bottom: 1px solid #000000;
+        margin: 15px 0;
+      }
+      @media print {
+        body {
+          background-color: #fff;
+        }
+        .header {
+          border: none;
+          padding: 0;
+        }
+        .center-text {
+          border-bottom: none;
+        }
+        th,
+        td {
+          border: 1px solid #000;
+        }
+        th {
+          border-left: 1px solid #ffffff;
+          border-right: 1px solid #ffffff;
+        }
+        tfoot td {
+          background-color: #eee;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <div>
+          <h2>{{ company.name }}</h2>
+          <p class="address">{{{ formatAddress company.address }}}</p>
+          <p>No of Employees: {{ columnSums.no_of_employees }}</p>
+        </div>
+        <div class="registration">
+          <p>Registration No: {{ company.employer_no }}</p>
+        </div>
+      </div>
+
+      <div class="horizontal-line"></div>
+
+      <p class="center-text">
+        Salary for the month of {{ payment_details.period }}
+      </p>
+
+      <div class="horizontal-line"></div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Member No.</th>
+            <th>Name</th>
+            <th>NIC</th>
+            <th>Basic Salary</th>
+            <th>Budgetary Allowance</th>
+            <th>Gross Salary</th>
+            <th>Deductions</th>
+            <th>Salary for EPF</th>
+            <th>EPF (Employee 8%)</th>
+            <th>EPF (Employer 12%)</th>
+            <th>ETF (Employer 3%)</th>
+            <th>Net Pay</th>
+            <th>Incentive</th>
+            <th>Allowance</th>
+            <th>OT</th>
+            <th>Final Salary</th>
+            <th>Signature</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{#each monthly_details}}
+          <tr>
+            <td>{{ this.employee_epf_no }}</td>
+            <td>{{ this.employee_name }}</td>
+            <td>{{ this.employee_nic }}</td>
+            <td>{{ this.monthly_basic_salary }}</td>
+            <td>{{ this.monthly_budgetary_allowance }}</td>
+            <td>{{ this.monthly_gross_salary }}</td>
+            <td>{{ this.monthly_deductions }}</td>
+            <td>{{ this.monthly_gross_salary }}</td>
+            <td>{{ this.monthly_epf_8 }}</td>
+            <td>{{ this.monthly_epf_12 }}</td>
+            <td>{{ this.monthly_etf_3 }}</td>
+            <td>{{ this.monthly_net_pay }}</td>
+            <td>{{ this.monthly_incentive }}</td>
+            <td>{{ this.monthly_allowances }}</td>
+            <td>{{ this.monthly_ot }}</td>
+            <td>{{ this.monthly_month_salary }}</td>
+            <td class="signature"></td>
+          </tr>
+          {{/each}}
+        </tbody>
+        <tfoot>
+          <tr class="total">
+            <td colspan="4">Total</td>
+            <td>{{ columnSums.monthly_budgetary_allowance }}</td>
+            <td>{{ columnSums.monthly_gross_salary }}</td>
+            <td>{{ columnSums.monthly_deductions }}</td>
+            <td>{{ columnSums.monthly_gross_salary }}</td>
+            <td>{{ columnSums.monthly_epf_8 }}</td>
+            <td>{{ columnSums.monthly_epf_12 }}</td>
+            <td>{{ columnSums.monthly_etf_3 }}</td>
+            <td>{{ columnSums.monthly_net_pay }}</td>
+            <td>{{ columnSums.monthly_incentive }}</td>
+            <td>{{ columnSums.monthly_allowances }}</td>
+            <td>{{ columnSums.monthly_ot }}</td>
+            <td>{{ columnSums.monthly_month_salary }}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </body>
+</html>

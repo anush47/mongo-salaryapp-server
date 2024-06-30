@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Payslip</title>
+    <style>
+      body {
+        font-family: "Georgia", serif;
+        margin: 0;
+        padding: 0;
+        background-color: #fff;
+        color: #000;
+      }
+
+      .payslip {
+        width: 250mm;
+        height: 360mm;
+        padding: 10mm;
+        box-sizing: border-box;
+        border: 1px solid #000;
+        margin: 20px auto;
+        background: #ffffff;
+        position: relative;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+
+      header {
+        border-bottom: 2px solid #000;
+        padding-bottom: 10px;
+        margin-bottom: 20px;
+      }
+
+      .company-info {
+        max-width: 50%;
+      }
+
+      .payslip-info {
+        position: absolute;
+        top: 13mm;
+        right: 10mm;
+        text-align: right;
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin: 0;
+        font-weight: normal;
+        font-family: "Georgia", serif;
+      }
+
+      h1 {
+        font-size: 42px; /* Increased font size */
+        letter-spacing: 1px;
+        margin-bottom: 10px;
+      }
+
+      h2 {
+        font-size: 36px; /* Increased font size */
+        letter-spacing: 1px;
+        margin-bottom: 5px;
+      }
+
+      h3 {
+        font-size: 30px; /* Increased font size */
+        letter-spacing: 0.5px;
+        margin-bottom: 10px;
+        border-bottom: 1px solid #000;
+        padding-bottom: 5px;
+        margin-top: 20px;
+      }
+      p {
+        font-size: 28px; /* Increased font size */
+        margin: 5px auto;
+      }
+
+      section {
+        margin-bottom: 20px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+      }
+
+      table,
+      th,
+      td {
+        border: 1px solid #000;
+      }
+
+      th,
+      td {
+        font-size: 29px; /* Increased font size */
+        padding: 14px 18px; /* Increased padding */
+        font-family: "Courier New", Courier, monospace;
+      }
+
+      th {
+        background-color: #000000;
+        color: #fff;
+        font-weight: bold;
+        text-align: left;
+        border-left: 1px solid #fff;
+        border-right: 1px solid #ffffff;
+      }
+
+      td {
+        text-align: right;
+      }
+
+      td:first-child {
+        text-align: left;
+      }
+
+      tr:nth-child(even) td {
+        background-color: #ffffff;
+      }
+
+      footer {
+        text-align: center;
+        border-top: 2px solid #000;
+        padding-top: 10px;
+        margin-top: 20px;
+      }
+
+      footer p {
+        margin: 5px 0;
+      }
+
+      .company-info p,
+      .payslip-info p {
+        margin: 3px 0;
+        font-family: "Courier New", Courier, monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="payslip">
+      <header>
+        <div class="company-info">
+          <h1>{{ company.name }}</h1>
+          <p>{{{ formatAddress company.address }}}</p>
+        </div>
+        <br />
+        <div class="payslip-info">
+          <h2>Payslip</h2>
+          <p>Month: {{ payment_details.period }}</p>
+          <p>Member No: {{monthly_details.[0].employee_epf_no}}</p>
+          <p>Employer No: {{company.employer_no}}</p>
+        </div>
+      </header>
+      <section class="employee-info">
+        <h3>Employee Information</h3>
+        <br />
+        <p>Name: {{monthly_details.[0].employee_name}}</p>
+        <p>N.I.C: {{monthly_details.[0].employee_nic}}</p>
+        <p>Designation: {{monthly_details.[0].employee_designation}}</p>
+        <br />
+      </section>
+      <section class="salary-info">
+        <h3><strong>Salary Details</strong></h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Description</th>
+              <th>Amount (LKR)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Basic Salary (with budgetary)</strong></td>
+              <td>
+                <strong>{{ monthly_details.[0].monthly_gross_salary }}</strong>
+              </td>
+            </tr>
+            <tr>
+              <td>Allowance</td>
+              <td>{{ monthly_details.[0].monthly_allowances }}</td>
+            </tr>
+            <tr>
+              <td>Incentive</td>
+              <td>{{ monthly_details.[0].monthly_incentive }}</td>
+            </tr>
+            <tr>
+              <td>O. T.</td>
+              <td>{{ monthly_details.[0].monthly_ot }}</td>
+            </tr>
+            <tr>
+              <td>E.P.F. Deduction (8%)</td>
+              <td>-{{monthly_details.[0].monthly_epf_8}}</td>
+            </tr>
+            <tr>
+              <td>Other Deduction</td>
+              <td>-{{ monthly_details.[0].monthly_deductions }}</td>
+            </tr>
+            <tr>
+              <td>Total Deduction</td>
+              <td>
+                -{{sum monthly_details.[0].monthly_deductions
+                monthly_details.[0].monthly_epf_8}}
+              </td>
+            </tr>
+            <tr>
+              <td><strong>Net Salary</strong></td>
+              <td>
+                <strong>{{monthly_details.[0].monthly_month_salary}}</strong>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+      <footer>
+        <br />
+        <p>
+          &copy; {{company.name}}.<br />
+          All rights reserved.
+        </p>
+      </footer>
+    </div>
+  </body>
+</html>
