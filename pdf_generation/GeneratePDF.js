@@ -2,6 +2,8 @@ const fs = require("fs");
 const pdf = require("html-pdf");
 const path = require("path");
 const Handlebars = require("handlebars");
+const { PDFDocument, degrees } = require("pdf-lib");
+const companyModel = require("../models/companies");
 
 // Register a helper to format address lines
 Handlebars.registerHelper("formatAddress", function (address) {
@@ -266,9 +268,179 @@ const generatePaySlipPDF = async (
   );
 };
 
+// Utility function to fetch details for PDF generation
+const details_for_pdf = async (employer_no, period) => {
+  try {
+    const company = await companyModel.findOne({ employer_no });
+    if (!company) {
+      throw new Error("Company not found.");
+    }
+
+    const monthly_details = company.employees.map((employee) => {
+      const monthlyDetail = employee.monthly_details.find(
+        (detail) => detail.period === period
+      );
+      return { employee: employee, monthly_detail: monthlyDetail };
+    });
+
+    const payment_details = company.monthly_payments.find(
+      (payment) => payment.period === period
+    );
+
+    if (!monthly_details || !payment_details) {
+      throw new Error("Monthly or payment details not found.");
+    }
+
+    return { company, monthly_details, payment_details };
+  } catch (error) {
+    throw new Error(
+      `Failed to fetch details for PDF generation: ${error.message}`
+    );
+  }
+};
+
+// Helper function to generate and combine payslip PDFs
+async function generateCombinedPayslipPDF(
+  company,
+  monthly_details,
+  payment_details,
+  combineIntoOnePage = false
+) {
+  const payslipBuffers = [];
+
+  // Get employee from monthly_details
+  for (const entry of monthly_details) {
+    const payslipPdfBytes = await generatePaySlipPDF(
+      company,
+      [entry], // Pass the relevant monthly_detail entry
+      payment_details,
+      entry.employee.epf_no
+    );
+    payslipBuffers.push(payslipPdfBytes);
+  }
+
+  // Combine all payslip PDFs into one
+  const combinedPdfDoc = await PDFDocument.create();
+  if (combineIntoOnePage) {
+    const page = combinedPdfDoc.addPage();
+    const { width, height } = page.getSize();
+
+    for (let i = 0; i < payslipBuffers.length; i++) {
+      const payslipPdfDoc = await PDFDocument.load(payslipBuffers[i]);
+      const [embeddedPage] = await combinedPdfDoc.embedPages(
+        payslipPdfDoc.getPages()
+      );
+      const xOffset = ((i % 2) * width) / 2;
+      const yOffset = height - (Math.floor(i / 2) * height) / 2 - height / 2;
+
+      page.drawPage(embeddedPage, {
+        x: xOffset,
+        y: yOffset,
+        width: width / 2,
+        height: height / 2,
+      });
+    }
+  } else {
+    for (const payslipBuffer of payslipBuffers) {
+      const payslipPdfDoc = await PDFDocument.load(payslipBuffer);
+      const copiedPages = await combinedPdfDoc.copyPages(
+        payslipPdfDoc,
+        payslipPdfDoc.getPageIndices()
+      );
+      copiedPages.forEach((page) => combinedPdfDoc.addPage(page));
+    }
+  }
+
+  return await combinedPdfDoc.save();
+}
+
+// Function to generate all relevant PDFs and combine them
+async function generateAllPDFs(
+  company,
+  monthly_details,
+  payment_details,
+  printable = false
+) {
+  const buffers = [];
+
+  // Generate Salary PDF if required
+  if (company.salary_sheets_required) {
+    const salaryPdfBytes = await generateSalaryPDF(
+      company,
+      monthly_details,
+      payment_details
+    );
+    //if printable rotate to potrait
+    if (printable === true) {
+      const salaryPdfDoc = await PDFDocument.load(salaryPdfBytes);
+      const [page] = salaryPdfDoc.getPages();
+      page.setRotation(degrees(90));
+      const rotatedPdfBytes = await salaryPdfDoc.save();
+      buffers.push(rotatedPdfBytes);
+    } else {
+      buffers.push(salaryPdfBytes);
+    }
+  }
+
+  // Generate EPF PDF if required
+  if (company.epf_required) {
+    const epfPdfBytes = await generateEPFPDF(
+      company,
+      monthly_details,
+      payment_details
+    );
+    buffers.push(epfPdfBytes);
+    //if printable add two copies
+    if (printable === true) {
+      buffers.push(epfPdfBytes);
+    }
+  }
+
+  // Generate ETF PDF if required
+  if (company.etf_required) {
+    const etfPdfBytes = await generateETFPDF(
+      company,
+      monthly_details,
+      payment_details
+    );
+    buffers.push(etfPdfBytes);
+    //if printable add two copies
+    if (printable === true) {
+      buffers.push(etfPdfBytes);
+    }
+  }
+
+  // Generate Payslips PDF if required (printable format)
+  if (company.pay_slips_required) {
+    const payslipAllPrintablePdfBytes = await generateCombinedPayslipPDF(
+      company,
+      monthly_details,
+      payment_details,
+      true
+    );
+    buffers.push(payslipAllPrintablePdfBytes);
+  }
+
+  // Combine all generated PDFs into one document
+  const combinedPdfDoc = await PDFDocument.create();
+  for (const buffer of buffers) {
+    const pdfDoc = await PDFDocument.load(buffer);
+    const copiedPages = await combinedPdfDoc.copyPages(
+      pdfDoc,
+      pdfDoc.getPageIndices()
+    );
+    copiedPages.forEach((page) => combinedPdfDoc.addPage(page));
+  }
+
+  return await combinedPdfDoc.save();
+}
+
 module.exports = {
   generateSalaryPDF,
   generateEPFPDF,
   generateETFPDF,
   generatePaySlipPDF,
+  generateCombinedPayslipPDF,
+  generateAllPDFs,
+  details_for_pdf,
 };

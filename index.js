@@ -2,15 +2,22 @@ const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
 const puppeteer = require("puppeteer");
+const bcrypt = require("bcryptjs"); // For password hashing
+const jwt = require("jsonwebtoken"); // For generating JWT tokens
 const companyModel = require("./models/companies");
+const User = require("./models/users");
+const authenticate = require("./middleware/authenticate");
 const { companyDetailsValidation } = require("./validation/validation");
 const {
   generateSalaryPDF,
   generateEPFPDF,
   generateETFPDF,
   generatePaySlipPDF,
+  generateCombinedPayslipPDF,
+  generateAllPDFs,
+  details_for_pdf,
 } = require("./pdf_generation/GeneratePDF");
-const { PDFDocument, degrees } = require("pdf-lib");
+const { PDFDocument } = require("pdf-lib");
 require("dotenv").config();
 
 const app = express();
@@ -19,172 +26,90 @@ app.use(express.json());
 
 mongoose.connect(process.env.MONGODB_URL);
 
-// Utility function to fetch details for PDF generation
-const details_for_pdf = async (employer_no, period) => {
+// Login endpoint
+app.post("/login", async (req, res) => {
+  const { email, password } = req.body;
+
+  // Basic validation
+  if (!email || !password) {
+    return res
+      .status(400)
+      .json({ error: "Please provide email and password." });
+  }
+
   try {
-    const company = await companyModel.findOne({ employer_no });
-    if (!company) {
-      throw new Error("Company not found.");
+    // Check if user exists in your database
+    const user = await User.findOne({ email });
+    console.log(user);
+    if (!user) {
+      return res.status(400).json({ error: "Invalid email." });
     }
 
-    const monthly_details = company.employees.map((employee) => {
-      const monthlyDetail = employee.monthly_details.find(
-        (detail) => detail.period === period
-      );
-      return { employee: employee, monthly_detail: monthlyDetail };
-    });
-
-    const payment_details = company.monthly_payments.find(
-      (payment) => payment.period === period
-    );
-
-    if (!monthly_details || !payment_details) {
-      throw new Error("Monthly or payment details not found.");
+    // Check if password is correct
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ error: "Invalid credentials." });
     }
 
-    return { company, monthly_details, payment_details };
+    // Generate and return JWT token
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
+    res.json({ token });
   } catch (error) {
-    throw new Error(
-      `Failed to fetch details for PDF generation: ${error.message}`
-    );
+    console.error("Error logging in:", error);
+    res.status(500).json({ error: "Internal server error." });
   }
-};
+});
 
-// Helper function to generate and combine payslip PDFs
-async function generateCombinedPayslipPDF(
-  company,
-  monthly_details,
-  payment_details,
-  combineIntoOnePage = false
-) {
-  const payslipBuffers = [];
+// Route to fetch user profile details
+app.get("/user/profile", authenticate, async (req, res) => {
+  try {
+    res.send(req.user); // Send user details stored in req.user
+  } catch (error) {
+    res.status(500).send({ error: "Internal server error." });
+  }
+});
 
-  // Get employee from monthly_details
-  for (const entry of monthly_details) {
-    const payslipPdfBytes = await generatePaySlipPDF(
-      company,
-      [entry], // Pass the relevant monthly_detail entry
-      payment_details,
-      entry.employee.epf_no
-    );
-    payslipBuffers.push(payslipPdfBytes);
+// Signup endpoint
+app.post("/signup", async (req, res) => {
+  const { email, password, name } = req.body;
+
+  // Basic validation
+  if (!email || !password) {
+    return res
+      .status(400)
+      .json({ error: "Please provide email and password." });
   }
 
-  // Combine all payslip PDFs into one
-  const combinedPdfDoc = await PDFDocument.create();
-  if (combineIntoOnePage) {
-    const page = combinedPdfDoc.addPage();
-    const { width, height } = page.getSize();
-
-    for (let i = 0; i < payslipBuffers.length; i++) {
-      const payslipPdfDoc = await PDFDocument.load(payslipBuffers[i]);
-      const [embeddedPage] = await combinedPdfDoc.embedPages(
-        payslipPdfDoc.getPages()
-      );
-      const xOffset = ((i % 2) * width) / 2;
-      const yOffset = height - (Math.floor(i / 2) * height) / 2 - height / 2;
-
-      page.drawPage(embeddedPage, {
-        x: xOffset,
-        y: yOffset,
-        width: width / 2,
-        height: height / 2,
-      });
+  try {
+    // Check if user with the same email already exists
+    let user = await User.findOne({ email });
+    if (user) {
+      return res.status(400).json({ error: "User already exists." });
     }
-  } else {
-    for (const payslipBuffer of payslipBuffers) {
-      const payslipPdfDoc = await PDFDocument.load(payslipBuffer);
-      const copiedPages = await combinedPdfDoc.copyPages(
-        payslipPdfDoc,
-        payslipPdfDoc.getPageIndices()
-      );
-      copiedPages.forEach((page) => combinedPdfDoc.addPage(page));
+
+    // Hash the password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create a new user
+    user = new User({ email, password: hashedPassword, name, type: "basic" });
+    await user.save();
+
+    // After loading dotenv, access JWT_SECRET from process.env
+    const jwtSecret = process.env.JWT_SECRET;
+
+    if (!jwtSecret) {
+      console.error("JWT_SECRET is missing in environment variables.");
+      process.exit(1); // Exit process if JWT_SECRET is not defined
     }
+
+    // Generate and return JWT token
+    const token = jwt.sign({ id: user._id }, jwtSecret);
+    res.json({ token });
+  } catch (error) {
+    console.error("Error signing up:", error);
+    res.status(500).json({ error: "Internal server error." });
   }
-
-  return await combinedPdfDoc.save();
-}
-
-// Function to generate all relevant PDFs and combine them
-async function generateAllPDFs(
-  company,
-  monthly_details,
-  payment_details,
-  printable = false
-) {
-  const buffers = [];
-
-  // Generate Salary PDF if required
-  if (company.salary_sheets_required) {
-    const salaryPdfBytes = await generateSalaryPDF(
-      company,
-      monthly_details,
-      payment_details
-    );
-    //if printable rotate to potrait
-    if (printable === true) {
-      const salaryPdfDoc = await PDFDocument.load(salaryPdfBytes);
-      const [page] = salaryPdfDoc.getPages();
-      page.setRotation(degrees(90));
-      const rotatedPdfBytes = await salaryPdfDoc.save();
-      buffers.push(rotatedPdfBytes);
-    } else {
-      buffers.push(salaryPdfBytes);
-    }
-  }
-
-  // Generate EPF PDF if required
-  if (company.epf_required) {
-    const epfPdfBytes = await generateEPFPDF(
-      company,
-      monthly_details,
-      payment_details
-    );
-    buffers.push(epfPdfBytes);
-    //if printable add two copies
-    if (printable === true) {
-      buffers.push(epfPdfBytes);
-    }
-  }
-
-  // Generate ETF PDF if required
-  if (company.etf_required) {
-    const etfPdfBytes = await generateETFPDF(
-      company,
-      monthly_details,
-      payment_details
-    );
-    buffers.push(etfPdfBytes);
-    //if printable add two copies
-    if (printable === true) {
-      buffers.push(etfPdfBytes);
-    }
-  }
-
-  // Generate Payslips PDF if required (printable format)
-  if (company.pay_slips_required) {
-    const payslipAllPrintablePdfBytes = await generateCombinedPayslipPDF(
-      company,
-      monthly_details,
-      payment_details,
-      true
-    );
-    buffers.push(payslipAllPrintablePdfBytes);
-  }
-
-  // Combine all generated PDFs into one document
-  const combinedPdfDoc = await PDFDocument.create();
-  for (const buffer of buffers) {
-    const pdfDoc = await PDFDocument.load(buffer);
-    const copiedPages = await combinedPdfDoc.copyPages(
-      pdfDoc,
-      pdfDoc.getPageIndices()
-    );
-    copiedPages.forEach((page) => combinedPdfDoc.addPage(page));
-  }
-
-  return await combinedPdfDoc.save();
-}
+});
 
 // Endpoint for generating various PDFs (updated with "all" case)
 app.get("/generate-pdf", async (req, res) => {

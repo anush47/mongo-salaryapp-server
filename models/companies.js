@@ -4,6 +4,7 @@ const companySchema = new mongoose.Schema();
 
 // Add fields to the schema in the desired order
 companySchema.add({
+  user: { type: String, required: true },
   name: { type: String, required: true },
   employer_no: { type: String, required: true, unique: true },
   address: { type: String },
