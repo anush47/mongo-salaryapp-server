@@ -17,6 +17,8 @@ const {
   generateAllPDFs,
   details_for_pdf,
 } = require("./pdf_generation/GeneratePDF");
+
+const { abhFill } = require("./pdf_generation/abhFill");
 const { PDFDocument } = require("pdf-lib");
 require("dotenv").config();
 
@@ -25,6 +27,21 @@ app.use(cors());
 app.use(express.json());
 
 mongoose.connect(process.env.MONGODB_URL);
+
+//post abhfill
+app.post("/generate-abh", async (req, res) => {
+  try {
+    const abh = req.body;
+    const pdfBytes = await abhFill(abh.data);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename=abh-filled.pdf`);
+    res.send(Buffer.from(pdfBytes));
+  } catch (e) {
+    console.log(e);
+    //respond
+    res.status(500).send("Error getting the form : " + e);
+  }
+});
 
 // Login endpoint
 app.post("/login", async (req, res) => {
