@@ -20,7 +20,7 @@ companySchema.add({
   my_payment: { type: Number },
   employees: [
     {
-      epf_no: { type: Number, unique: true, required: true },
+      epf_no: { type: Number, required: true },
       name: { type: String },
       designation: { type: String },
       nic: { type: String },

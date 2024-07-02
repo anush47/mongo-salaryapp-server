@@ -144,8 +144,12 @@ const generatePDF = async (
     });
   });
 
-  // Format period
-  payment_details.period = formatPeriod(payment_details.period);
+  // Format period if period in form yyyy-mm
+  const regex = /^\d{4}-\d{2}$/;
+  if (regex.test(payment_details.period)) {
+    console.log("year");
+    payment_details.period = formatPeriod(payment_details.period);
+  }
 
   // Replace placeholders with actual dynamic values
   const filledHTMLTemplate = templateCompiled({
