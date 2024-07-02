@@ -57,7 +57,6 @@ app.post("/login", async (req, res) => {
   try {
     // Check if user exists in your database
     const user = await User.findOne({ email });
-    console.log(user);
     if (!user) {
       return res.status(400).json({ error: "Invalid email." });
     }
@@ -69,7 +68,9 @@ app.post("/login", async (req, res) => {
     }
 
     // Generate and return JWT token
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+      expiresIn: "1h", // Token expiration time
+    });
     res.json({ token });
   } catch (error) {
     console.error("Error logging in:", error);

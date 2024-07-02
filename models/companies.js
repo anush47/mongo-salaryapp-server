@@ -1,9 +1,6 @@
 const mongoose = require("mongoose");
 
-const companySchema = new mongoose.Schema();
-
-// Add fields to the schema in the desired order
-companySchema.add({
+const companySchema = new mongoose.Schema({
   user: { type: String, required: true },
   name: { type: String, required: true },
   employer_no: { type: String, required: true, unique: true },
@@ -20,7 +17,7 @@ companySchema.add({
   my_payment: { type: Number },
   employees: [
     {
-      epf_no: { type: Number, required: true },
+      epf_no: { type: Number, required: true, unique: false },
       name: { type: String },
       designation: { type: String },
       nic: { type: String },
@@ -31,11 +28,11 @@ companySchema.add({
       incentive_variation: { type: Number },
       total_salary: { type: Number },
       total_salary_variation: { type: Number },
-      ot_hours_range: { type: String }, // "10-20"
+      ot_hours_range: { type: String },
       b_card: { type: String },
       monthly_details: [
         {
-          period: { type: String, unique: true, required: true },
+          period: { type: String, required: true },
           gross_salary: { type: Number },
           ot: { type: Number },
           ot_y: { type: String },
@@ -50,15 +47,13 @@ companySchema.add({
   ],
   monthly_payments: [
     {
-      period: { type: String, unique: true, required: true },
-      //epf
+      period: { type: String, required: true },
       epf_reference_no: { type: String },
       epf_amount: { type: Number },
       epf_payment_method: { type: String },
       epf_cheque_no: { type: String },
       epf_collected_day: { type: String },
       epf_paid_day: { type: String },
-      //etf
       etf_amount: { type: Number },
       etf_payment_method: { type: String },
       etf_cheque_no: { type: String },
@@ -69,14 +64,26 @@ companySchema.add({
   ],
 });
 
-// Indexes for unique `period` in `monthly_details` array for each employee
+//index for employer_no
+companySchema.index({ employer_no: 1 }, { unique: true });
+
+//composite unique index for employer_no and employees.epf_no
 companySchema.index(
-  { "employees.monthly_details.period": 1 },
+  { employer_no: 1, employees: { epf_no: 1 } },
   { unique: true }
 );
 
-// Index for unique `period` in `monthly_payments` array for the company schema
-companySchema.index({ "monthly_payments.period": 1 }, { unique: true });
+//composite unique index for employer_no and employees.epf_no and employees.monthly_details.period
+companySchema.index(
+  { employer_no: 1, employees: { epf_no: 1, monthly_details: { period: 1 } } },
+  { unique: true }
+);
+
+//composite unique index for employer_no and monthly_payments.period
+companySchema.index(
+  { employer_no: 1, monthly_payments: { period: 1 } },
+  { unique: true }
+);
 
 const companyModel = mongoose.model("companies", companySchema);
 

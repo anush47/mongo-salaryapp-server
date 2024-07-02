@@ -83,14 +83,19 @@ function getNICDetails(nic) {
 
   // Determine gender
   if (days > 500) {
-    gender = "Female";
+    gender = "FEMALE";
     days -= 500;
   } else {
-    gender = "Male";
+    gender = "MALE";
   }
 
   // Determine date of birth
-  const dobDate = new Date(year, 0, 1); // January 1st of the given year
+  const dobDate = new Date(`${year}-01-01`); // January 1st of the given year
+  //check if year is leap
+  const isLeapYear = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  if (days > 59 && !isLeapYear) {
+    days -= 1;
+  }
   dobDate.setDate(dobDate.getDate() + days - 1);
 
   //format as dd/mm/yyyy
